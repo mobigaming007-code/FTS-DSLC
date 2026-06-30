@@ -14,6 +14,7 @@ const adminLinks = [
   ["/admin/minh-chung", "▣", "Duyệt minh chứng"],
   ["/admin/gcn", "✦", "Duyệt GCN"],
   ["/admin/no-link-gcn", "⌁", "Nợ link GCN"],
+  ["/admin/cau-hinh-gcn", "◇", "Cấu hình GCN"],
   ["/admin/lich-su-minh-chung", "◷", "Lịch sử MC"],
   ["/admin/lich-su-gcn", "◷", "Lịch sử GCN"],
   ["/admin/truong-diem", "⌖", "Trưởng điểm"],
@@ -21,6 +22,7 @@ const adminLinks = [
   ["/admin/tinh-buoi", "◷", "Tính buổi"],
   ["/admin/vi-pham", "⚑", "Vi phạm"],
   ["/admin/cap-tai-khoan", "◎", "Cấp tài khoản"],
+  ["/admin/dat-lai-he-thong", "!", "Đặt lại hệ thống"],
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -30,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [userLabel, setUserLabel] = useState("");
   const [roleLabel, setRoleLabel] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showResetLink, setShowResetLink] = useState(false);
   useEffect(() => {
     const name = sessionStorage.getItem(isAdmin ? "adminName" : "hoTen") || "";
     const role = isAdmin
@@ -44,6 +47,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     setUserLabel(name ? `Chào ${name}${maTNV ? ` · ${maTNV}` : ""}` : "");
     setRoleLabel(role);
+    const roleKey = (
+      sessionStorage.getItem("capQuyenKey") ||
+      sessionStorage.getItem("capQuyen") ||
+      ""
+    )
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Ä‘/g, "d")
+      .replace(/\s+/g, "_");
+    setShowResetLink(
+      isAdmin &&
+        roleKey === "superadmin" &&
+        sessionStorage.getItem("taiKhoanKhoiTao") === "true",
+    );
   }, [isAdmin, pathname]);
   useEffect(() => {
     const recoverChunk = (event: ErrorEvent | PromiseRejectionEvent) => {
@@ -75,7 +95,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.location.href = "/tnv";
   }
   if (isLogin) return <>{children}</>;
-  const links = isAdmin ? adminLinks : volunteerLinks;
+  const links = (isAdmin ? adminLinks : volunteerLinks).filter(
+    ([href]) => href !== "/admin/dat-lai-he-thong" || showResetLink,
+  );
 
   return (
     <div className="app-shell">

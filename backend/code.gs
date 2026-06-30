@@ -43,6 +43,7 @@ function doPost(e) {
 
       // Các case ADMIN [cite: 179, 180, 181, 182, 183, 185]
       case "getAdminDashboard": responseData = getAdminDashboard(); break;
+      case "getTinhBuoiStatus": responseData = getTinhBuoiStatus(requestData); break;
       case "adminTinhBuoiTheoNgay": responseData = adminTinhBuoiTheoNgay(requestData); break;
       case "getDanhSachMinhChungChoXet": responseData = getDanhSachMinhChungChoXet(requestData); break;
       case "adminDuyetMinhChung": responseData = adminDuyetMinhChung(requestData); break;
@@ -50,6 +51,16 @@ function doPost(e) {
       case "adminCapGCN": responseData = adminCapGCN(requestData); break;
       case "getDanhSachNoLinkGCN": responseData = getDanhSachNoLinkGCN(requestData); break;
       case "adminCapNhatLinkGCN": responseData = adminCapNhatLinkGCN(requestData); break;
+      case "getCauHinhGCNAdmin": responseData = getCauHinhGCNAdmin(requestData); break;
+      case "getCauHinhGCN": responseData = getCauHinhGCNAdmin(requestData); break;
+      case "adminLuuCauHinhLoaiGCN": responseData = adminLuuCauHinhLoaiGCN(requestData); break;
+      case "luuCauHinhLoaiGCN": responseData = adminLuuCauHinhLoaiGCN(requestData); break;
+      case "adminXoaCauHinhLoaiGCN": responseData = adminXoaCauHinhLoaiGCN(requestData); break;
+      case "xoaCauHinhLoaiGCN": responseData = adminXoaCauHinhLoaiGCN(requestData); break;
+      case "adminLuuCauHinhDotGCN": responseData = adminLuuCauHinhDotGCN(requestData); break;
+      case "luuCauHinhDotGCN": responseData = adminLuuCauHinhDotGCN(requestData); break;
+      case "adminXoaCauHinhDotGCN": responseData = adminXoaCauHinhDotGCN(requestData); break;
+      case "xoaCauHinhDotGCN": responseData = adminXoaCauHinhDotGCN(requestData); break;
       case "getLichSuMinhChung": responseData = getLichSuMinhChung(requestData); break;
       case "adminSuaBuoiMC": responseData = adminSuaBuoiMC(requestData.maMC, requestData.soBuoiMoi); break;
       case "getLichSuGCN": responseData = getLichSuGCN(requestData); break; // Lấy danh sách lịch sử GCN
@@ -78,6 +89,8 @@ function doPost(e) {
       case "adminCapTaiKhoan": responseData = adminCapTaiKhoan(requestData); break;
       case "adminDoiTrangThaiTaiKhoan": responseData = adminDoiTrangThaiTaiKhoan(requestData); break;
       case "adminDoiMatKhauTaiKhoan": responseData = adminDoiMatKhauTaiKhoan(requestData); break;
+      case "getDatLaiHeThongAccess": responseData = getDatLaiHeThongAccess(requestData); break;
+      case "adminDatLaiToanBoHeThong": responseData = adminDatLaiToanBoHeThong(requestData); break;
 
     }
     return sendRes(responseData);
@@ -222,6 +235,12 @@ function parseScope_(scope) {
     .filter(Boolean);
 }
 
+function isTrueValue_(value) {
+  if (value === true) return true;
+  const text = (value || "").toString().trim().toLowerCase();
+  return ["true", "1", "yes", "y", "x", "co", "có"].indexOf(text) >= 0;
+}
+
 function processLoginAdmin(user, pass) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName("PhanQuyen_Admin");
@@ -253,7 +272,8 @@ function processLoginAdmin(user, pass) {
         capQuyen: capQuyen,
         capQuyenKey: normalizeRole_(capQuyen),
         phamVi: phamVi,
-        phamViList: parseScope_(phamVi)
+        phamViList: parseScope_(phamVi),
+        taiKhoanKhoiTao: isTrueValue_(data[i][6])
       };
     }
   }
@@ -287,7 +307,8 @@ function getAdminInfoFromSession_(sessionId) {
           capQuyen: data[i][2] || "",
           capQuyenKey: normalizeRole_(data[i][2]),
           phamVi: data[i][3] || "",
-          phamViList: parseScope_(data[i][3])
+          phamViList: parseScope_(data[i][3]),
+          taiKhoanKhoiTao: isTrueValue_(data[i][6])
         };
       }
     }
@@ -321,13 +342,15 @@ function canAccessFeature_(admin, feature) {
     dashboard: ["superadmin", "admin", "admin_khu_vuc", "kho_bai", "acc"],
     minhchung: ["superadmin", "admin", "admin_khu_vuc"],
     gcn: ["superadmin", "admin", "acc", "admin_khu_vuc"],
+    cauhinhgcn: ["superadmin", "admin"],
     kho: ["superadmin", "kho_bai"],
     acc: ["superadmin", "acc"],
     nhansu: ["superadmin", "admin"],
     diemtruc: ["superadmin", "admin"],
     vipham: ["superadmin", "admin", "admin_khu_vuc"],
     tinhbuoi: ["superadmin", "admin"],
-    taikhoan: ["superadmin"]
+    taikhoan: ["superadmin"],
+    resethethong: ["superadmin"]
   };
 
   return (matrix[feature] || []).includes(role);

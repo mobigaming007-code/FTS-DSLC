@@ -77,7 +77,9 @@ export default function TnvPage() {
           // Lưu thông tin phân quyền của Admin để dùng ở trang admin.html
           if (res.adminName) sessionStorage.setItem("adminName", res.adminName);
           if (res.capQuyen) sessionStorage.setItem("capQuyen", res.capQuyen);
+          if (res.capQuyenKey) sessionStorage.setItem("capQuyenKey", res.capQuyenKey);
           if (res.phamVi) sessionStorage.setItem("phamVi", res.phamVi);
+          sessionStorage.setItem("taiKhoanKhoiTao", res.taiKhoanKhoiTao ? "true" : "false");
 
           setTimeout(() => {
             window.location.href =

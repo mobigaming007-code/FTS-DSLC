@@ -11,6 +11,64 @@ export default function noLinkGcnPage() {
         const API_URL = API_URLS.admin;
         const sessionId = sessionStorage.getItem('sessionId');
         const adminName = sessionStorage.getItem('adminName') || "Admin";
+
+        const ADMIN_PAGE_SIZE = 20;
+        const __adminPagination = {};
+
+        function getAdminPaginationNumbers(page, totalPages) {
+          const pages = new Set([1, totalPages]);
+          for (let i = 1; i <= Math.min(4, totalPages); i++) pages.add(i);
+          for (let i = page - 1; i <= page + 1; i++) {
+            if (i >= 1 && i <= totalPages) pages.add(i);
+          }
+          return Array.from(pages).sort((a, b) => a - b);
+        }
+
+        function paginateRenderedList(key, container, requestedPage) {
+          if (!container) return;
+          const items = Array.from(container.children).filter((el) => el.dataset.adminPagination !== '1');
+          if (items.length <= ADMIN_PAGE_SIZE) {
+            const oldPager = container.querySelector('[data-admin-pagination="1"]');
+            if (oldPager) oldPager.remove();
+            items.forEach((el) => { el.style.display = ''; });
+            __adminPagination[key] = { containerId: container.id, page: 1 };
+            return;
+          }
+
+          const totalPages = Math.ceil(items.length / ADMIN_PAGE_SIZE);
+          const currentPage = Math.min(Math.max(Number(requestedPage || __adminPagination[key]?.page || 1), 1), totalPages);
+          __adminPagination[key] = { containerId: container.id, page: currentPage };
+
+          items.forEach((el, index) => {
+            const start = (currentPage - 1) * ADMIN_PAGE_SIZE;
+            el.style.display = index >= start && index < start + ADMIN_PAGE_SIZE ? '' : 'none';
+          });
+
+          const oldPager = container.querySelector('[data-admin-pagination="1"]');
+          if (oldPager) oldPager.remove();
+
+          const pageNumbers = getAdminPaginationNumbers(currentPage, totalPages);
+          let last = 0;
+          const controls = pageNumbers.map((pageNumber) => {
+            const gap = pageNumber - last > 1 ? '<span class="px-1 text-gray-400">...</span>' : '';
+            last = pageNumber;
+            const activeClass = pageNumber === currentPage ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
+            return gap + '<button type="button" onclick="changeAdminPage(\'' + key + '\', ' + pageNumber + ')" class="min-w-8 rounded border px-2 py-1 text-xs font-bold ' + activeClass + '">' + pageNumber + '</button>';
+          }).join('');
+
+          const pager = document.createElement('div');
+          pager.dataset.adminPagination = '1';
+          pager.className = 'mt-4 flex flex-wrap items-center justify-center gap-1 border-t border-gray-100 pt-3';
+          pager.innerHTML = controls;
+          container.appendChild(pager);
+        }
+
+        function changeAdminPage(key, page) {
+          const state = __adminPagination[key];
+          if (!state) return;
+          const container = document.getElementById(state.containerId);
+          paginateRenderedList(key, container, page);
+        }
     
     
         // ==========================================
@@ -19,7 +77,8 @@ export default function noLinkGcnPage() {
         let __adminApiCalls = 0;
         let __adminBusy = false;
         let __busyToastTimer = null;
-        const __nativeFetch = window.fetch.bind(window);
+        const __nativeFetch = (window as any).__adminNativeFetch || window.fetch.bind(window);
+        (window as any).__adminNativeFetch = __nativeFetch;
     
         const ACTION_LOADING_TEXT = {
           getAdminDashboard: 'Đang tải tổng quan...',
@@ -137,7 +196,15 @@ export default function noLinkGcnPage() {
           const message = ACTION_LOADING_TEXT[action] || 'Đang xử lý dữ liệu...';
           beginAdminProcessing(message);
           try {
-            return await __nativeFetch(resource, options);
+            const safeOptions = { ...options };
+            safeOptions.headers = { ...(safeOptions.headers || {}), 'Content-Type': 'text/plain;charset=utf-8' };
+            return await __nativeFetch(resource, safeOptions);
+          } catch (error) {
+            console.warn('Không kết nối được API Apps Script: ' + (error && error.message ? error.message : 'Failed to fetch'));
+            return new Response(JSON.stringify({ success: false, error: 'Không kết nối được API Apps Script. Kiểm tra mạng, quyền truy cập Apps Script hoặc deploy backend.' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
           } finally {
             endAdminProcessing();
           }
@@ -241,6 +308,7 @@ export default function noLinkGcnPage() {
                     </div>
                   </div>
                 </div>`).join('');
+              paginateRenderedList('minhchung', container);
             }
           } catch (e) {}
         }
@@ -288,6 +356,7 @@ export default function noLinkGcnPage() {
                     <button onclick="submitDuyetGCN('${item.maYC}', 'Từ chối')" class="flex-1 bg-red-600 text-white font-bold py-1.5 rounded">Từ chối</button>
                   </div>
                 </div>`).join('');
+              paginateRenderedList('gcn', container);
             }
           } catch (e) {}
         }
@@ -326,6 +395,7 @@ export default function noLinkGcnPage() {
                     <button onclick="submitUpdateLink('${item.maYC}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded text-xs whitespace-nowrap shadow-sm">Cập nhật</button>
                   </div>
                 </div>`).join('');
+              paginateRenderedList('nolink', container);
             }
           } catch (e) {}
         }
@@ -415,6 +485,7 @@ export default function noLinkGcnPage() {
               </div>
             </div>`;
           }).join('');
+              paginateRenderedList('lichsumc', container);
         }
       } catch (e) { container.innerHTML = "Lỗi tải dữ liệu."; }
     }
@@ -490,6 +561,7 @@ export default function noLinkGcnPage() {
                 <span class="text-[10px] text-gray-400 mt-1 italic">Duyệt bởi: ${item.admin || 'Admin'}</span>
               </div>
             </div>`).join('');
+              paginateRenderedList('lichsugcn', container);
         }
       } catch (e) { 
         container.innerHTML = "<p class='text-center text-red-500 text-xs'>Lỗi kết nối hệ thống.</p>"; 
@@ -610,6 +682,7 @@ export default function noLinkGcnPage() {
                     <button onclick="deleteTruongDiem(${x.rowNumber}, '${String(x.maTNV || '').replace(/'/g, "\'")}')" class="shrink-0 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 font-bold rounded-lg text-[10px] px-3 py-1.5">Xóa</button>
                   </div>
                 </div>`).join('');
+              paginateRenderedList('truongdiem', box);
             } else box.innerHTML = `<p class="text-xs text-red-500">${res.error}</p>`;
           } catch(e) { box.innerHTML = '<p class="text-xs text-red-500">Lỗi tải dữ liệu.</p>'; }
         }
@@ -786,6 +859,7 @@ export default function noLinkGcnPage() {
                   </div>
                 </div>`;
             }).join('');
+              paginateRenderedList('baocaovipham', box);
           } catch(e) {
             box.innerHTML = '<p class="text-xs text-red-500">Lỗi tải báo cáo vi phạm.</p>';
           }
@@ -903,6 +977,7 @@ export default function noLinkGcnPage() {
                     <button onclick="deleteViPham(${x.rowNumber}, '${String(x.maTNV || '').replace(/'/g, "\\'")}')" class="shrink-0 bg-red-600 text-white hover:bg-red-700 font-bold rounded-lg text-[10px] px-3 py-1.5">Xóa</button>
                   </div>
                 </div>`).join('');
+              paginateRenderedList('lichsuvipham', box);
             } else {
               box.innerHTML = `<p class="text-xs text-red-500">${escapeText(res.error)}</p>`;
             }
@@ -1112,6 +1187,7 @@ export default function noLinkGcnPage() {
                 </div>
               </div>`;
           }).join('');
+              paginateRenderedList('taikhoanadmin', box);
         }
     
         async function doiTrangThaiTaiKhoan(email, trangThai) {
@@ -1173,7 +1249,7 @@ export default function noLinkGcnPage() {
     
     
       
-    Object.assign(window as any, { getActionFromFetchOptions, setGlobalProcessing, setAdminButtonsDisabled, beginAdminProcessing, endAdminProcessing, showBusyToast, logout, switchTab, updateBadge, loadDashboard, loadMinhChung, submitDuyetMC, loadGCN, submitDuyetGCN, loadNoLink, submitUpdateLink, escapeAdminHtml, jsArgForOnclick, loadLichSuMC, filterTable, openEditMC, loadLichSuGCN, openEditGCN, loadDiemTrucOptions, autoSetHeSoTruongDiem, traCuuTruongDiem, submitTruongDiem, loadTruongDiem, deleteTruongDiem, escapeText, badgeViPhamStatus, traCuuViPham, submitViPham, loadViPham, loadBaoCaoViPham, duyetBaoCaoViPham, tuChoiBaoCaoViPham, thucThiBaoCaoViPham, loadLichSuViPhamChinhThuc, deleteViPham, getSelectedPhamViTaiKhoan, selectAllKhuVucTaiKhoan, onChangeCapQuyenTaiKhoan, initCapTaiKhoanVisibility, loadCapTaiKhoan, loadKhuVucCapTaiKhoan, submitCapTaiKhoan, loadDanhSachTaiKhoanAdmin, renderDanhSachTaiKhoanAdmin, doiTrangThaiTaiKhoan, doiMatKhauTaiKhoan });
+    Object.assign(window as any, { changeAdminPage, getActionFromFetchOptions, setGlobalProcessing, setAdminButtonsDisabled, beginAdminProcessing, endAdminProcessing, showBusyToast, logout, switchTab, updateBadge, loadDashboard, loadMinhChung, submitDuyetMC, loadGCN, submitDuyetGCN, loadNoLink, submitUpdateLink, escapeAdminHtml, jsArgForOnclick, loadLichSuMC, filterTable, openEditMC, loadLichSuGCN, openEditGCN, loadDiemTrucOptions, autoSetHeSoTruongDiem, traCuuTruongDiem, submitTruongDiem, loadTruongDiem, deleteTruongDiem, escapeText, badgeViPhamStatus, traCuuViPham, submitViPham, loadViPham, loadBaoCaoViPham, duyetBaoCaoViPham, tuChoiBaoCaoViPham, thucThiBaoCaoViPham, loadLichSuViPhamChinhThuc, deleteViPham, getSelectedPhamViTaiKhoan, selectAllKhuVucTaiKhoan, onChangeCapQuyenTaiKhoan, initCapTaiKhoanVisibility, loadCapTaiKhoan, loadKhuVucCapTaiKhoan, submitCapTaiKhoan, loadDanhSachTaiKhoanAdmin, renderDanhSachTaiKhoanAdmin, doiTrangThaiTaiKhoan, doiMatKhauTaiKhoan });
 
   }, []);
 

@@ -8,6 +8,7 @@ type CalculateResult = {
   error?: string;
   message?: string;
   date?: string;
+  lastCalculatedDate?: string;
   totalRows?: number;
   totalBuoi?: number;
   executedBy?: string;
@@ -26,8 +27,15 @@ function vietnamToday() {
   }).format(new Date());
 }
 
+function formatDisplayDate(value: string) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  return day && month && year ? `${day}/${month}/${year}` : value;
+}
+
 export default function TinhBuoiPage() {
   const [ngay, setNgay] = useState("");
+  const [lastCalculatedDate, setLastCalculatedDate] = useState("");
   const [role, setRole] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingHeSo, setSavingHeSo] = useState(false);
@@ -45,9 +53,14 @@ export default function TinhBuoiPage() {
 
   useEffect(() => {
     setNgay(vietnamToday());
+    setLastCalculatedDate(localStorage.getItem("lastCalculatedBuoiDate") || "");
     setRole(sessionStorage.getItem("capQuyen") || "");
     const sessionId = sessionStorage.getItem("sessionId") || "";
     Promise.all([
+      callApi<{ success: boolean; lastCalculatedDate?: string }>("admin", {
+        action: "getTinhBuoiStatus",
+        sessionId,
+      }),
       callApi<{ success: boolean; data?: DiemTruc[] }>("admin", {
         action: "getDanhSachDiemTruc",
         sessionId,
@@ -57,7 +70,14 @@ export default function TinhBuoiPage() {
         sessionId,
       }),
     ])
-      .then(([diemRes, cauHinhRes]) => {
+      .then(([statusRes, diemRes, cauHinhRes]) => {
+        if (statusRes.success && statusRes.lastCalculatedDate) {
+          setLastCalculatedDate(statusRes.lastCalculatedDate);
+          localStorage.setItem(
+            "lastCalculatedBuoiDate",
+            statusRes.lastCalculatedDate,
+          );
+        }
         if (diemRes.success)
           setDsDiemDacBiet((diemRes.data || []).filter((diem) => diem.isDDB));
         if (cauHinhRes.success) setCauHinhDiemDacBiet(cauHinhRes.data || []);
@@ -120,6 +140,11 @@ export default function TinhBuoiPage() {
         ngay,
       });
       setResult(response);
+      if (response.success) {
+        const calculatedDate = response.lastCalculatedDate || response.date || ngay;
+        setLastCalculatedDate(calculatedDate);
+        localStorage.setItem("lastCalculatedBuoiDate", calculatedDate);
+      }
     } catch {
       setResult({
         success: false,
@@ -222,6 +247,13 @@ export default function TinhBuoiPage() {
                 >
                   {loading ? "Đang tính buổi…" : "Tính buổi"}
                 </button>
+              </div>
+
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+                Đã tính buổi tính đến ngày{" "}
+                {lastCalculatedDate
+                  ? formatDisplayDate(lastCalculatedDate)
+                  : "chưa có dữ liệu"}
               </div>
 
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">

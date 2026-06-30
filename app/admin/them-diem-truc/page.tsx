@@ -22,6 +22,7 @@ type ApiResult = {
   item?: KhuVuc;
 };
 type FormData = Omit<KhuVuc, "rowNumber">;
+const PAGE_SIZE = 20;
 
 const emptyForm: FormData = {
   maKhuVuc: "",
@@ -55,12 +56,22 @@ function buildQrToken(maKhuVuc: string) {
   return ma ? `DSLC_${ma}_${randomToken()}` : "";
 }
 
+function getPageNumbers(page: number, totalPages: number) {
+  const pages = new Set([1, totalPages]);
+  for (let i = 1; i <= Math.min(4, totalPages); i++) pages.add(i);
+  for (let i = page - 1; i <= page + 1; i++) {
+    if (i >= 1 && i <= totalPages) pages.add(i);
+  }
+  return Array.from(pages).sort((a, b) => a - b);
+}
+
 export default function ThemDiemTrucPage() {
   const [role, setRole] = useState("");
   const [form, setForm] = useState<FormData>(emptyForm);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [special, setSpecial] = useState(false);
   const [items, setItems] = useState<KhuVuc[]>([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
@@ -71,6 +82,16 @@ export default function ThemDiemTrucPage() {
     [role],
   );
   const sessionId = () => sessionStorage.getItem("sessionId") || "";
+  const totalPages = Math.ceil(items.length / PAGE_SIZE);
+  const currentPage = Math.min(page, totalPages || 1);
+  const visibleItems = useMemo(
+    () =>
+      items.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE,
+      ),
+    [currentPage, items],
+  );
 
   async function loadItems() {
     setLoading(true);
@@ -96,6 +117,10 @@ export default function ThemDiemTrucPage() {
     setRole(sessionStorage.getItem("capQuyen") || "");
     loadItems();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [items.length]);
 
   function resetForm() {
     setForm(emptyForm);
@@ -437,7 +462,7 @@ export default function ThemDiemTrucPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {items.map((item) => (
+                        {visibleItems.map((item) => (
                           <tr
                             key={item.rowNumber}
                             className="border-t border-gray-100"
@@ -501,6 +526,30 @@ export default function ThemDiemTrucPage() {
                       <p className="p-4 text-sm text-gray-500">
                         Chưa có điểm trực.
                       </p>
+                    )}
+                  </div>
+                )}
+                {totalPages > 1 && (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-1 border-t border-gray-100 pt-3">
+                    {getPageNumbers(currentPage, totalPages).map(
+                      (pageNumber, index, pages) => (
+                        <span key={pageNumber} className="flex items-center gap-1">
+                          {index > 0 && pageNumber - pages[index - 1] > 1 && (
+                            <span className="px-1 text-xs text-gray-400">...</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setPage(pageNumber)}
+                            className={`min-w-8 rounded border px-2 py-1 text-xs font-bold ${
+                              pageNumber === currentPage
+                                ? "border-gray-900 bg-gray-900 text-white"
+                                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        </span>
+                      ),
                     )}
                   </div>
                 )}

@@ -113,6 +113,29 @@ function replaceTongHopRowsForDate_(sheet, dateKey, newRows) {
   if (rows.length) sheet.getRange(2, 1, rows.length, 14).setValues(rows);
 }
 
+function getNgayTinhBuoiGanNhat_() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('DiemDanh_TongHop');
+  if (!sheet || sheet.getLastRow() < 2) return '';
+
+  const rows = sheet.getRange(2, 3, sheet.getLastRow() - 1, 1).getValues();
+  let latest = '';
+  rows.forEach(row => {
+    const key = ddDateKey_(row[0]);
+    if (key && (!latest || key > latest)) latest = key;
+  });
+  return latest;
+}
+
+function getTinhBuoiStatus(requestData) {
+  try {
+    const auth = requireAdmin_(requestData || {}, 'tinhbuoi');
+    if (!auth.ok) return { success: false, error: auth.error };
+    return { success: true, lastCalculatedDate: getNgayTinhBuoiGanNhat_() };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 function adminTinhBuoiTheoNgay(requestData) {
   try {
     const auth = requireAdmin_(requestData || {}, 'tinhbuoi');
@@ -120,6 +143,6 @@ function adminTinhBuoiTheoNgay(requestData) {
     const ngay = ((requestData || {}).ngay || '').toString().trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(ngay)) return { success: false, error: 'Vui lòng chọn ngày tính buổi hợp lệ.' };
     const result = dailyConsolidate(ngay);
-    return Object.assign(result, { message: 'Đã tính lại điểm danh ngày ' + result.date + '.', executedBy: auth.admin.adminName || auth.admin.email });
+    return Object.assign(result, { lastCalculatedDate: getNgayTinhBuoiGanNhat_(), message: 'Đã tính lại điểm danh ngày ' + result.date + '.', executedBy: auth.admin.adminName || auth.admin.email });
   } catch (error) { return { success: false, error: error.message }; }
 }

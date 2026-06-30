@@ -332,7 +332,7 @@ function getLichSuMinhChung(requestData) {
       }
     }
 
-    return { success: true, data: list.reverse().slice(0, 50) };
+    return { success: true, data: list.reverse() };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -392,7 +392,7 @@ function getLichSuGCN(requestData) {
       }
     }
     // Trả về dữ liệu đảo ngược (mới nhất lên đầu) giống Lịch sử MC[cite: 6]
-    return { success: true, data: list.reverse().slice(0, 50) };//[cite: 6]
+    return { success: true, data: list.reverse() };//[cite: 6]
   } catch (e) { 
     return { success: false, error: e.message }; 
   }
@@ -787,7 +787,7 @@ function getDanhSachTruongDiemTruc() {
         admin: rows[i][8], trangThai: rows[i][9], heSoNhan: parseHeSoNhan_(rows[i][10], 1)
       });
     }
-    return { success: true, data: list.reverse().slice(0, 100) };
+    return { success: true, data: list.reverse() };
   } catch (e) { return { success: false, error: e.message }; }
 }
 
@@ -1003,7 +1003,7 @@ function getBaoCaoViPham(requestData) {
       role: admin.capQuyen,
       capQuyenKey: admin.capQuyenKey,
       phamViList: admin.phamViList,
-      data: list.reverse().slice(0, 200)
+      data: list.reverse()
     };
   } catch (e) {
     return { success: false, error: e.message };
@@ -1204,7 +1204,7 @@ function getLichSuViPham(requestData) {
       });
     }
 
-    return { success: true, data: list.reverse().slice(0, 100) };
+    return { success: true, data: list.reverse() };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -1253,13 +1253,18 @@ function getPhanQuyenAdminSheet_() {
   let sheet = ss.getSheetByName(SHEET_PHAN_QUYEN_ADMIN);
   if (!sheet) sheet = ss.insertSheet(SHEET_PHAN_QUYEN_ADMIN);
 
-  const headers = ['Email', 'HoTen', 'CapQuyen', 'PhamViKhuVuc', 'TrangThai', 'MatKhau'];
+  const headers = ['Email', 'HoTen', 'CapQuyen', 'PhamViKhuVuc', 'TrangThai', 'MatKhau', 'TaiKhoanKhoiTao'];
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
   } else {
     const firstRow = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0];
     const isEmptyHeader = firstRow.every(v => !v);
     if (isEmptyHeader) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    else {
+      for (let i = 0; i < headers.length; i++) {
+        if (!firstRow[i]) sheet.getRange(1, i + 1).setValue(headers[i]);
+      }
+    }
   }
 
   return sheet;
@@ -1328,7 +1333,8 @@ function getDanhSachTaiKhoanAdmin(requestData) {
         capQuyen: rows[i][2] || '',
         phamViKhuVuc: rows[i][3] || '',
         trangThai: rows[i][4] || '',
-        coMatKhau: !!rows[i][5]
+        coMatKhau: !!rows[i][5],
+        taiKhoanKhoiTao: isTrueValue_(rows[i][6])
       });
     }
 
@@ -1414,7 +1420,8 @@ function adminCapTaiKhoan(requestData) {
       capQuyen,
       phamViKhuVuc,
       'Hoạt động',
-      matKhau
+      matKhau,
+      false
     ]);
 
     return { success: true, message: 'Đã cấp tài khoản admin thành công.' };
@@ -1483,6 +1490,122 @@ function adminDoiMatKhauTaiKhoan(requestData) {
     }
 
     return { success: false, error: 'Không tìm thấy tài khoản cần đổi mật khẩu.' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function requireKhoiTaoSuperAdmin_(requestData) {
+  const auth = requireAdmin_(requestData || {}, 'resethethong');
+  if (!auth.ok) return auth;
+
+  if (!auth.admin || auth.admin.capQuyenKey !== 'superadmin' || !auth.admin.taiKhoanKhoiTao) {
+    return { ok: false, error: 'Chỉ SuperAdmin khởi tạo mới được đặt lại toàn bộ hệ thống.' };
+  }
+
+  return auth;
+}
+
+function getDatLaiHeThongAccess(requestData) {
+  try {
+    const auth = requireKhoiTaoSuperAdmin_(requestData);
+    if (!auth.ok) return { success: true, allowed: false };
+    return {
+      success: true,
+      allowed: true,
+      email: auth.admin.email,
+      adminName: auth.admin.adminName || ''
+    };
+  } catch (e) {
+    return { success: true, allowed: false };
+  }
+}
+
+function clearSheetDataKeepHeader_(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { sheet: sheetName, deletedRows: 0, skipped: true };
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { sheet: sheetName, deletedRows: 0, skipped: false };
+
+  const deletedRows = lastRow - 1;
+  sheet.deleteRows(2, deletedRows);
+  return { sheet: sheetName, deletedRows: deletedRows, skipped: false };
+}
+
+function resetPhanQuyenAdminKeepInitializer_(sheet, authEmail) {
+  const rows = sheet.getDataRange().getValues();
+  let initializerRow = 0;
+  let initializerData = null;
+
+  for (let i = 1; i < rows.length; i++) {
+    const email = (rows[i][0] || '').toString().trim().toLowerCase();
+    const isInitializer = isTrueValue_(rows[i][6]);
+    if (email === authEmail && isInitializer) {
+      initializerRow = i + 1;
+      initializerData = rows[i].slice(0, 7);
+      break;
+    }
+  }
+
+  if (!initializerRow || !initializerData) {
+    throw new Error('Không tìm thấy tài khoản khởi tạo hợp lệ để giữ lại.');
+  }
+
+  if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+  sheet.getRange(2, 1, 1, 7).setValues([initializerData]);
+  return { sheet: SHEET_PHAN_QUYEN_ADMIN, deletedRows: Math.max(rows.length - 2, 0), skipped: false };
+}
+
+function adminDatLaiToanBoHeThong(requestData) {
+  try {
+    const auth = requireKhoiTaoSuperAdmin_(requestData);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const matKhauXacNhan = (requestData.matKhauXacNhan || '').toString();
+    if (!matKhauXacNhan) return { success: false, error: 'Vui lòng nhập mật khẩu để xác nhận.' };
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const adminSheet = getPhanQuyenAdminSheet_();
+    const adminRows = adminSheet.getDataRange().getValues();
+    let validPassword = false;
+
+    for (let i = 1; i < adminRows.length; i++) {
+      const email = (adminRows[i][0] || '').toString().trim().toLowerCase();
+      const password = (adminRows[i][5] || '').toString();
+      const isInitializer = isTrueValue_(adminRows[i][6]);
+      if (email === auth.admin.email && password === matKhauXacNhan && isInitializer) {
+        validPassword = true;
+        break;
+      }
+    }
+
+    if (!validPassword) return { success: false, error: 'Mật khẩu xác nhận không đúng hoặc tài khoản không phải tài khoản khởi tạo.' };
+
+    const sheetsToClear = [
+      'CauHinhKhuVuc',
+      'CauHinhGCN',
+      'CauHinhDot',
+      'DiemDanh_Raw',
+      'DiemDanh_TongHop',
+      'MinhChung',
+      'MINHCHUNG',
+      'YeuCauGCN',
+      'ViPham',
+      'BaoCaoViPham',
+      'TruongDiemTruc'
+    ];
+
+    const results = sheetsToClear.map(function(sheetName) {
+      return clearSheetDataKeepHeader_(ss, sheetName);
+    });
+    results.push(resetPhanQuyenAdminKeepInitializer_(adminSheet, auth.admin.email));
+
+    return {
+      success: true,
+      message: 'Đã đặt lại toàn bộ hệ thống. Chỉ giữ lại tài khoản khởi tạo.',
+      results: results
+    };
   } catch (e) {
     return { success: false, error: e.message };
   }
